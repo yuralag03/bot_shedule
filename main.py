@@ -22,6 +22,8 @@ dp.include_router(router)
 DAYS_MAP = {0: "Понедельник", 1: "Вторник", 2: "Среда", 3: "Четверг", 4: "Пятница", 5: "Суббота", 6: "Воскресенье"}
 WEEK_DAYS_ORDER = [0, 1, 2, 3, 4, 5]
 
+print(f"🔑 BOT_TOKEN loaded: {len(BOT_TOKEN)} chars")
+print(f"🔑 Token starts with: {BOT_TOKEN[:10]}...")
 
 # ==================== START & MAIN MENU ====================
 @router.message(CommandStart())
