@@ -1,0 +1,4 @@
+[phases.setup]
+nixPkgs = ["python311"]git add nixpacks.toml
+git commit -m "Add nixpacks.toml to fix Python version"
+git push origin main
