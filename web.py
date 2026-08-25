@@ -1,0 +1,30 @@
+from aiohttp import web
+import asyncio
+from main import main as bot_main
+
+async def handle(request):
+    return web.Response(text="Бот работает! 🤖")
+
+async def run_web_server():
+    app = web.Application()
+    app.router.add_get("/", handle)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    # Render даёт порт через переменную окружения PORT
+    port = int(web.os.environ.get("PORT", 8080))
+    site = web.TCPSite(runner, "0.0.0.0", port)
+    await site.start()
+    # Держим сервер вечно
+    while True:
+        await asyncio.sleep(3600)
+
+async def main():
+    # Запускаем бота и веб-сервер параллельно
+    await asyncio.gather(
+        bot_main(),
+        run_web_server()
+    )
+
+if __name__ == "__main__":
+    import web
+    asyncio.run(main())
