@@ -134,3 +134,10 @@ async def clear_all_overrides(user_id: int):
     async with aiosqlite.connect('bot.db') as db:
         await db.execute("DELETE FROM user_overrides WHERE user_id = ?", (user_id,))
         await db.commit()
+
+async def group_exists(group_name: str) -> bool:
+    """Проверяет, есть ли уже расписание для этой группы"""
+    async with aiosqlite.connect('bot.db') as db:
+        async with db.execute("SELECT COUNT(*) FROM schedule WHERE group_name = ?", (group_name,)) as cursor:
+            row = await cursor.fetchone()
+            return row[0] > 0

@@ -3,6 +3,7 @@ from aiogram.fsm.state import State, StatesGroup
 class UploadSchedule(StatesGroup):
     waiting_for_file = State()
     waiting_for_group_name = State()
+    waiting_for_confirm = State()
 
 class EditLesson(StatesGroup):
     waiting_for_action = State()

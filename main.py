@@ -10,7 +10,7 @@ from aiogram.exceptions import TelegramBadRequest
 from config import BOT_TOKEN, ADMIN_IDS
 from db import (init_db, set_user_settings, get_user_settings, get_semester_start,
                 get_week_parity, get_schedule_for_day, get_all_groups,
-                add_override, get_overrides, delete_override, clear_all_overrides)
+                add_override, get_overrides, delete_override, clear_all_overrides, group_exists)
 from parser import parse_and_save_schedule
 from states import UploadSchedule, EditLesson
 
@@ -601,11 +601,69 @@ def _apply_overrides_to_lessons_with_notes(lessons, overrides, day_name, parity)
 # ==================== ADMIN UPLOAD (FSM) ====================
 @router.message(Command("upload"))
 async def cmd_upload(message: types.Message, state: FSMContext):
-    if message.from_user.id not in ADMIN_IDS:
-        await message.answer("⛔ У вас нет прав для этой команды.")
-        return
+    # Теперь доступно ВСЕМ пользователям
     await state.set_state(UploadSchedule.waiting_for_file)
     await message.answer("📥 Отправьте Excel файл (.xlsx) с расписанием.")
+
+
+@router.message(UploadSchedule.waiting_for_group_name, F.text)
+async def receive_group_name(message: types.Message, state: FSMContext):
+    group_name = message.text.strip()
+    data = await state.get_data()
+    file_path = data["file_path"]
+
+    # Если группа уже есть — спрашиваем подтверждение
+    if await group_exists(group_name):
+        await state.update_data(group_name=group_name)
+        await state.set_state(UploadSchedule.waiting_for_confirm)
+        kb = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="✅ Да, перезаписать", callback_data="confirm_upload:yes"),
+             InlineKeyboardButton(text="❌ Отмена", callback_data="confirm_upload:no")]
+        ])
+        await message.answer(
+            f"⚠️ Расписание для группы <b>{group_name}</b> уже есть в базе.\nПерезаписать его?",
+            reply_markup=kb, parse_mode="HTML"
+        )
+        return
+
+    await _process_upload(message, file_path, group_name, state)
+
+
+@router.callback_query(UploadSchedule.waiting_for_confirm, F.data.startswith("confirm_upload:"))
+async def confirm_upload(callback: types.CallbackQuery, state: FSMContext):
+    answer = callback.data.split(":")[1]
+    data = await state.get_data()
+
+    if answer == "no":
+        if os.path.exists(data["file_path"]):
+            os.remove(data["file_path"])
+        await state.clear()
+        await callback.message.edit_text("❌ Загрузка отменена.")
+        return
+
+    await state.set_state(None)
+    await _process_upload(callback.message, data["file_path"], data["group_name"], state, user=callback.from_user)
+
+
+async def _process_upload(message, file_path, group_name, state, user=None):
+    await message.answer("⏳ Обрабатываю файл, пожалуйста подождите...")
+    try:
+        count = await parse_and_save_schedule(file_path, group_name)
+        if os.path.exists(file_path):
+            os.remove(file_path)
+        await state.clear()
+
+        # Логируем, кто загрузил (для контроля)
+        if user:
+            print(f"📤 Загрузил: @{user.username or user.first_name} (id={user.id}) → группа {group_name}")
+
+        await message.answer(
+            f"✅ Расписание для группы <b>{group_name}</b> успешно загружено!\nСохранено записей: {count}",
+            parse_mode="HTML"
+        )
+    except Exception as e:
+        await state.clear()
+        await message.answer(f"❌ Ошибка при обработке файла: {e}")
 
 
 @router.message(UploadSchedule.waiting_for_file, F.document)
@@ -618,26 +676,6 @@ async def receive_file(message: types.Message, state: FSMContext):
     await state.update_data(file_path=file_path)
     await state.set_state(UploadSchedule.waiting_for_group_name)
     await message.answer("✅ Файл получен. Теперь введите название группы (например, бИПТ-252):")
-
-
-@router.message(UploadSchedule.waiting_for_group_name, F.text)
-async def receive_group_name(message: types.Message, state: FSMContext):
-    group_name = message.text.strip()
-    data = await state.get_data()
-    file_path = data["file_path"]
-
-    await message.answer("⏳ Обрабатываю файл, пожалуйста подождите...")
-    try:
-        count = await parse_and_save_schedule(file_path, group_name)
-        os.remove(file_path)
-        await state.clear()
-        await message.answer(
-            f"✅ Расписание для группы <b>{group_name}</b> успешно загружено!\nСохранено записей: {count}",
-            parse_mode="HTML")
-    except Exception as e:
-        await state.clear()
-        await message.answer(f"❌ Ошибка при обработке файла: {e}")
-
 
 @router.message(UploadSchedule.waiting_for_file)
 async def wrong_file_type(message: types.Message):
