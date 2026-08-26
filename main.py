@@ -134,7 +134,7 @@ async def show_day_schedule(message: types.Message, day_name: str, group_name: s
         buttons = []
         for i, lesson_data in enumerate(lessons_with_notes, 1):
             time_str, l_type, subject, teacher, room, note = lesson_data
-            time_clean = time_str
+            time_clean = _format_time(time_str)
             text += (f"<b>{i}.</b> <code>{time_clean}</code>\n"
                      f"📚 <i>{l_type}</i>: <b>{subject}</b>\n"
                      f"👨‍🏫 {teacher}\n"
@@ -185,7 +185,7 @@ async def show_week_schedule(message: types.Message, group_name: str, subgroup: 
             full_text += f"📅 <b>{day_name}</b>\n"
             for i, lesson in enumerate(lessons, 1):
                 time_str, l_type, subject, teacher, room = lesson
-                time_clean = time_str
+                time_clean = _format_time(time_str)
                 full_text += (f"  <b>{i}.</b> <code>{time_clean}</code>\n"
                               f"     📚 <i>{l_type}</i>: <b>{subject}</b>\n"
                               f"     👨‍🏫 {teacher}\n"
@@ -275,16 +275,22 @@ def _subjects_match(subj1, subj2):
 
     return clean1 == clean2
 
+def _time_to_minutes(t: str) -> int:
+    """'12:00:00' или '12:00' → минуты от начала дня"""
+    parts = t.strip().split(':')
+    return int(parts[0]) * 60 + int(parts[1])
+
 def _sort_lessons(lessons):
     """Сортирует пары по времени начала"""
-    def key(lesson):
-        start = lesson[0].split(' - ')[0].strip()
-        try:
-            h, m = start.split(':')
-            return int(h) * 60 + int(m)
-        except ValueError:
-            return 9999
-    return sorted(lessons, key=key)
+    return sorted(lessons, key=lambda lesson: _time_to_minutes(lesson[0].split(' - ')[0]))
+
+def _format_time(time_str: str) -> str:
+    """'10:15:00 - 11:50:00' → '10:15 - 11:50'"""
+    def cut(t):
+        p = t.strip().split(':')
+        return f"{int(p[0]):02d}:{int(p[1]):02d}"
+    a, b = time_str.split(' - ')
+    return f"{cut(a)} - {cut(b)}"
 
 def _time_key(time_str: str):
     """Превращает время в минуты от начала дня для правильной сортировки"""
