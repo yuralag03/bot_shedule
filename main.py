@@ -134,7 +134,7 @@ async def show_day_schedule(message: types.Message, day_name: str, group_name: s
         buttons = []
         for i, lesson_data in enumerate(lessons_with_notes, 1):
             time_str, l_type, subject, teacher, room, note = lesson_data
-            time_clean = time_str.split(' - ')[0].replace(':00', '') + ' - ' + time_str.split(' - ')[1].replace(':00', '')
+            time_clean = time_str
             text += (f"<b>{i}.</b> <code>{time_clean}</code>\n"
                      f"📚 <i>{l_type}</i>: <b>{subject}</b>\n"
                      f"👨‍🏫 {teacher}\n"
@@ -185,8 +185,7 @@ async def show_week_schedule(message: types.Message, group_name: str, subgroup: 
             full_text += f"📅 <b>{day_name}</b>\n"
             for i, lesson in enumerate(lessons, 1):
                 time_str, l_type, subject, teacher, room = lesson
-                time_clean = time_str.split(' - ')[0].replace(':00', '') + ' - ' + time_str.split(' - ')[1].replace(
-                    ':00', '')
+                time_clean = time_str
                 full_text += (f"  <b>{i}.</b> <code>{time_clean}</code>\n"
                               f"     📚 <i>{l_type}</i>: <b>{subject}</b>\n"
                               f"     👨‍🏫 {teacher}\n"
@@ -275,6 +274,17 @@ def _subjects_match(subj1, subj2):
     clean2 = ' '.join(str(subj2).strip().split()).lower()
 
     return clean1 == clean2
+
+def _sort_lessons(lessons):
+    """Сортирует пары по времени начала"""
+    def key(lesson):
+        start = lesson[0].split(' - ')[0].strip()
+        try:
+            h, m = start.split(':')
+            return int(h) * 60 + int(m)
+        except ValueError:
+            return 9999
+    return sorted(lessons, key=key)
 
 def _time_key(time_str: str):
     """Превращает время в минуты от начала дня для правильной сортировки"""
@@ -603,7 +613,7 @@ def _apply_overrides_to_lessons_with_notes(lessons, overrides, day_name, parity)
                 moved_note or note
             ))
 
-    return result
+    return _sort_lessons(result)
 
 # ==================== ADMIN UPLOAD (FSM) ====================
 @router.message(Command("upload"))
