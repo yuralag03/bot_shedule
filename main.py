@@ -124,7 +124,7 @@ async def show_day_schedule(message: types.Message, day_name: str, group_name: s
 
     day_idx = next((k for k, v in DAYS_MAP.items() if v == day_name), 0)
 
-    header = f"📅 <b>{day_name}</b> ({parity_text})\n🏫 Группа: {group_name} | 👥 Подгруппа: {subgroup}\n\n"
+    header = f"📅 <b>{day_name}</b> ({parity_text}) · v7\n🏫 Группа: {group_name} | 👥 Подгруппа: {subgroup}\n\n"
     kb_buttons = [[InlineKeyboardButton(text="🏠 В меню", callback_data="back_to_menu")]]
 
     if not lessons_with_notes:
