@@ -114,13 +114,13 @@ async def process_day_schedule(callback: types.CallbackQuery):
                             callback.from_user.id)
 
 
-async def show_day_schedule(message: types.Message, day_name: str, group_name: str, subgroup: int, parity_text: str,
-                            parity: int, user_id: int, edit: bool = True):
+async def show_day_schedule(message: types.Message, day_name: str, group_name: str, subgroup: int, parity_text: str, parity: int, user_id: int, edit: bool = True):
     lessons = await get_schedule_for_day(group_name, day_name, subgroup, parity)
     overrides = await get_overrides(user_id)
 
     lessons_with_notes = _apply_overrides_to_lessons_with_notes(lessons, overrides, day_name, parity)
     lessons_with_notes.sort(key=lambda lesson: _time_key(lesson[0]))
+
     day_idx = next((k for k, v in DAYS_MAP.items() if v == day_name), 0)
 
     header = f"📅 <b>{day_name}</b> ({parity_text})\n🏫 Группа: {group_name} | 👥 Подгруппа: {subgroup}\n\n"
@@ -134,8 +134,7 @@ async def show_day_schedule(message: types.Message, day_name: str, group_name: s
         buttons = []
         for i, lesson_data in enumerate(lessons_with_notes, 1):
             time_str, l_type, subject, teacher, room, note = lesson_data
-            time_clean = time_str.split(' - ')[0].replace(':00', '') + ' - ' + time_str.split(' - ')[1].replace(':00',
-                                                                                                                '')
+            time_clean = time_str.split(' - ')[0].replace(':00', '') + ' - ' + time_str.split(' - ')[1].replace(':00', '')
             text += (f"<b>{i}.</b> <code>{time_clean}</code>\n"
                      f"📚 <i>{l_type}</i>: <b>{subject}</b>\n"
                      f"👨‍🏫 {teacher}\n"
@@ -143,14 +142,11 @@ async def show_day_schedule(message: types.Message, day_name: str, group_name: s
             if note:
                 text += f"📝 <i>{note}</i>\n"
             text += "\n"
-
-            buttons.append(
-                [InlineKeyboardButton(text=f"✏️ {i}. {subject[:20]}", callback_data=f"edit:{day_idx}:{i}:{parity}")])
+            buttons.append([InlineKeyboardButton(text=f"✏️ {i}. {subject[:20]}", callback_data=f"edit:{day_idx}:{i}:{parity}")])
 
         buttons.append([InlineKeyboardButton(text="🏠 В меню", callback_data="back_to_menu")])
         kb = InlineKeyboardMarkup(inline_keyboard=buttons)
 
-    # ГЛАВНОЕ ИЗМЕНЕНИЕ: Если edit=False, отправляем новое сообщение
     if edit:
         try:
             await message.edit_text(text, reply_markup=kb, parse_mode="HTML")
@@ -159,7 +155,6 @@ async def show_day_schedule(message: types.Message, day_name: str, group_name: s
                 print(f"⚠️ Ошибка редактирования сообщения: {e}")
     else:
         await message.answer(text, reply_markup=kb, parse_mode="HTML")
-
 
 async def show_week_schedule(message: types.Message, group_name: str, subgroup: int, week_offset: int, user_id: int):
     start_date = await get_semester_start()
@@ -182,7 +177,8 @@ async def show_week_schedule(message: types.Message, group_name: str, subgroup: 
     for day_idx in WEEK_DAYS_ORDER:
         day_name = DAYS_MAP[day_idx]
         lessons = await get_schedule_for_day(group_name, day_name, subgroup, parity)
-        lessons = _apply_overrides_to_lessons(lessons, overrides, day_name, parity)
+        lessons = _apply_overrides_to_lessons_with_notes(lessons, overrides, day_name, parity)
+        lessons.sort(key=lambda lesson: _time_key(lesson[0]))  # ← вот эта строка
 
         if lessons:
             has_any_lessons = True
@@ -281,10 +277,13 @@ def _subjects_match(subj1, subj2):
     return clean1 == clean2
 
 def _time_key(time_str: str):
-    """Превращает '8:30:00 - 10:00:00' в минуты от начала дня для правильной сортировки"""
-    start = time_str.split('-')[0].strip()
-    parts = start.split(':')
-    return int(parts[0]) * 60 + int(parts[1])
+    """Превращает время в минуты от начала дня для правильной сортировки"""
+    try:
+        start = time_str.split('-')[0].strip().replace('.', ':')
+        parts = start.split(':')
+        return int(parts[0]) * 60 + int(parts[1])
+    except Exception:
+        return 9999  # если формат странный — пара уйдёт в конец, но бот не упадёт
 
 
 # ==================== EDIT LESSON ====================
