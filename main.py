@@ -120,7 +120,6 @@ async def show_day_schedule(message: types.Message, day_name: str, group_name: s
     overrides = await get_overrides(user_id)
 
     lessons_with_notes = _apply_overrides_to_lessons_with_notes(lessons, overrides, day_name, parity)
-    lessons_with_notes.sort(key=lambda lesson: _time_key(lesson[0]))
 
     day_idx = next((k for k, v in DAYS_MAP.items() if v == day_name), 0)
 
@@ -179,7 +178,6 @@ async def show_week_schedule(message: types.Message, group_name: str, subgroup: 
         day_name = DAYS_MAP[day_idx]
         lessons = await get_schedule_for_day(group_name, day_name, subgroup, parity)
         lessons = _apply_overrides_to_lessons_with_notes(lessons, overrides, day_name, parity)
-        lessons.sort(key=lambda lesson: _time_key(lesson[0]))  # ← вот эта строка
 
         if lessons:
             has_any_lessons = True
@@ -208,62 +206,6 @@ async def show_week_schedule(message: types.Message, group_name: str, subgroup: 
         await message.edit_text(full_text, reply_markup=kb, parse_mode="HTML")
     except TelegramBadRequest:
         pass
-
-
-def _apply_overrides_to_lessons(lessons, overrides, day_name, parity):
-    """Применяет изменения пользователя к расписанию"""
-    result = []
-    cancelled_or_moved_indices = set()  # Индексы пар, которые были отменены или перенесены
-
-    # Сначала находим отменённые и перенесённые пары
-    for override in overrides:
-        (ov_id, ov_type, ov_day, ov_time, ov_subject, ov_parity,
-         new_day, new_time, new_room, new_teacher, note) = override
-
-        if ov_day == day_name and ov_parity == parity:
-            for i, lesson in enumerate(lessons):
-                time_str, l_type, subject, teacher, room = lesson
-                if ov_time == time_str and _subjects_match(ov_subject, subject):
-                    if ov_type in ["cancel", "move"]:
-                        cancelled_or_moved_indices.add(i)
-
-    # Собираем пары, применяя изменения
-    for i, lesson in enumerate(lessons):
-        if i in cancelled_or_moved_indices:
-            continue  # Пропускаем отменённые или перенесённые
-
-        time_str, l_type, subject, teacher, room = lesson
-
-        # Проверяем, есть ли изменения для этой пары
-        for override in overrides:
-            (ov_id, ov_type, ov_day, ov_time, ov_subject, ov_parity,
-             new_day, new_time, new_room, new_teacher, note) = override
-
-            if ov_day == day_name and ov_time == time_str and ov_parity == parity and _subjects_match(ov_subject,
-                                                                                                      subject):
-                if ov_type == "edit":
-                    teacher = new_teacher if new_teacher else teacher
-                    room = new_room if new_room else room
-                    # Заметку пока не добавляем в кортеж, но можно расширить
-                    break
-
-        result.append((time_str, l_type, subject, teacher, room))
-
-    # Добавляем перенесённые пары в этот день
-    for override in overrides:
-        (ov_id, ov_type, ov_day, ov_time, ov_subject, ov_parity,
-         new_day, new_time, new_room, new_teacher, note) = override
-
-        if ov_type == "move" and new_day == day_name and ov_parity == parity:
-            # Находим исходную пару, чтобы получить l_type
-            for lesson in lessons:
-                time_str, l_type, subject, teacher, room = lesson
-                if ov_time == time_str and _subjects_match(ov_subject, subject):
-                    result.append((new_time or time_str, l_type, subject, new_teacher or teacher, new_room or room))
-                    break
-
-    return result
-
 
 def _subjects_match(subj1, subj2):
     """Проверяет, совпадают ли предметы, игнорируя переносы строк, пробелы и регистр"""
@@ -301,16 +243,6 @@ def _time_to_minutes(t) -> int:
 def _sort_lessons(lessons):
     return sorted(lessons, key=lambda lesson: _time_to_minutes(str(lesson[0]).split(' - ')[0]))
 
-def _time_key(time_str: str):
-    """Превращает время в минуты от начала дня для правильной сортировки"""
-    try:
-        start = time_str.split('-')[0].strip().replace('.', ':')
-        parts = start.split(':')
-        return int(parts[0]) * 60 + int(parts[1])
-    except Exception:
-        return 9999  # если формат странный — пара уйдёт в конец, но бот не упадёт
-
-
 # ==================== EDIT LESSON ====================
 @router.callback_query(F.data.startswith("edit:"))
 async def start_edit_lesson(callback: types.CallbackQuery, state: FSMContext):
@@ -325,7 +257,6 @@ async def start_edit_lesson(callback: types.CallbackQuery, state: FSMContext):
     lessons = await get_schedule_for_day(group_name, day_name, subgroup, parity)
     overrides = await get_overrides(callback.from_user.id)
     lessons = _apply_overrides_to_lessons_with_notes(lessons, overrides, day_name, parity)
-    lessons.sort(key=lambda lesson: _time_key(lesson[0]))
 
     if lesson_idx <= len(lessons):
         time_str, l_type, subject, teacher, room, note = lessons[lesson_idx - 1]
