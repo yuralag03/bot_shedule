@@ -120,6 +120,7 @@ async def show_day_schedule(message: types.Message, day_name: str, group_name: s
     overrides = await get_overrides(user_id)
 
     lessons_with_notes = _apply_overrides_to_lessons_with_notes(lessons, overrides, day_name, parity)
+    lessons_with_notes.sort(key=lambda lesson: _time_key(lesson[0]))
     day_idx = next((k for k, v in DAYS_MAP.items() if v == day_name), 0)
 
     header = f"📅 <b>{day_name}</b> ({parity_text})\n🏫 Группа: {group_name} | 👥 Подгруппа: {subgroup}\n\n"
@@ -279,6 +280,12 @@ def _subjects_match(subj1, subj2):
 
     return clean1 == clean2
 
+def _time_key(time_str: str):
+    """Превращает '8:30:00 - 10:00:00' в минуты от начала дня для правильной сортировки"""
+    start = time_str.split('-')[0].strip()
+    parts = start.split(':')
+    return int(parts[0]) * 60 + int(parts[1])
+
 
 # ==================== EDIT LESSON ====================
 @router.callback_query(F.data.startswith("edit:"))
@@ -294,6 +301,7 @@ async def start_edit_lesson(callback: types.CallbackQuery, state: FSMContext):
     lessons = await get_schedule_for_day(group_name, day_name, subgroup, parity)
     overrides = await get_overrides(callback.from_user.id)
     lessons = _apply_overrides_to_lessons_with_notes(lessons, overrides, day_name, parity)
+    lessons.sort(key=lambda lesson: _time_key(lesson[0]))
 
     if lesson_idx <= len(lessons):
         time_str, l_type, subject, teacher, room, note = lessons[lesson_idx - 1]
