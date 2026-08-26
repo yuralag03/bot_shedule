@@ -183,13 +183,14 @@ async def show_week_schedule(message: types.Message, group_name: str, subgroup: 
             has_any_lessons = True
             full_text += f"📅 <b>{day_name}</b>\n"
             for i, lesson in enumerate(lessons, 1):
-                time_str, l_type, subject, teacher, room = lesson
+                time_str, l_type, subject, teacher, room, note = lesson
                 time_clean = _format_time(time_str)
                 full_text += (f"  <b>{i}.</b> <code>{time_clean}</code>\n"
                               f"     📚 <i>{l_type}</i>: <b>{subject}</b>\n"
-                              f"     👨‍🏫 {teacher}\n"
-                              f"     🚪 Ауд. {room}\n")
-            full_text += "\n"
+                              f"     👨‍🏫 {teacher} | 🏫 {room}\n")
+                if note:
+                    full_text += f"     📝 <i>{note}</i>\n"
+                full_text += "\n"
 
     if not has_any_lessons:
         full_text += "🎉 <b>На этой неделе пар нет!</b> Можно выдыхать."
