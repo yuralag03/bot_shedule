@@ -124,7 +124,7 @@ async def show_day_schedule(message: types.Message, day_name: str, group_name: s
 
     day_idx = next((k for k, v in DAYS_MAP.items() if v == day_name), 0)
 
-    header = f"📅 <b>{day_name}</b> ({parity_text}) · v7\n🏫 Группа: {group_name} | 👥 Подгруппа: {subgroup}\n\n"
+    header = f"📅 <b>{day_name}</b> ({parity_text})\n🏫 Группа: {group_name} | 👥 Подгруппа: {subgroup}\n\n"
     kb_buttons = [[InlineKeyboardButton(text="🏠 В меню", callback_data="back_to_menu")]]
 
     if not lessons_with_notes:
@@ -276,32 +276,30 @@ def _subjects_match(subj1, subj2):
 
     return clean1 == clean2
 
-def _time_to_minutes(t) -> int:
-    """Любой формат времени → минуты от начала дня. Мусор → в конец списка."""
-    t = str(t or '')
-    m = re.search(r'(\d{1,2})[:.](\d{2})', t)   # "12:00", "12.00", "12:00:00"
+def _norm_part(t: str) -> str:
+    """'12' → '12:00', '8:30' → '08:30', '12:00:00' → '12:00'"""
+    t = str(t or '').strip()
+    m = re.fullmatch(r'(\d{1,2}):(\d{2})(?::\d{2})?', t)
     if m:
-        return int(m.group(1)) * 60 + int(m.group(2))
-    m = re.search(r'(\d{1,2})', t)               # просто "12"
+        return f"{int(m.group(1)):02d}:{m.group(2)}"
+    m = re.fullmatch(r'(\d{1,2})', t)
     if m:
-        return int(m.group(1)) * 60
-    print(f"⚠️ Странное время в базе: {t!r}")
-    return 9999
-
-def _sort_lessons(lessons):
-    """Сортирует пары по времени начала"""
-    return sorted(lessons, key=lambda lesson: _time_to_minutes(str(lesson[0]).split(' - ')[0]))
+        return f"{int(m.group(1)):02d}:00"
+    return t
 
 def _format_time(time_str) -> str:
-    """'10:15:00 - 11:50:00' → '10:15 - 11:50'; мусор оставляет как есть"""
-    def cut(t):
-        m = re.match(r'\s*(\d{1,2})[:.](\d{2})(?::\d{2})?', str(t or ''))
-        return f"{int(m.group(1)):02d}:{m.group(2)}" if m else str(t or '').strip()
     s = str(time_str or '')
     if ' - ' in s:
         a, b = s.split(' - ', 1)
-        return f"{cut(a)} - {cut(b)}"
-    return s
+        return f"{_norm_part(a)} - {_norm_part(b)}"
+    return _norm_part(s)
+
+def _time_to_minutes(t) -> int:
+    m = re.match(r'(\d{1,2}):(\d{2})', _norm_part(t))
+    return int(m.group(1)) * 60 + int(m.group(2)) if m else 9999
+
+def _sort_lessons(lessons):
+    return sorted(lessons, key=lambda lesson: _time_to_minutes(str(lesson[0]).split(' - ')[0]))
 
 def _time_key(time_str: str):
     """Превращает время в минуты от начала дня для правильной сортировки"""
