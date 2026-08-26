@@ -1,5 +1,6 @@
 import asyncio
 import os
+import re
 from datetime import datetime, timedelta
 from aiogram import Bot, Dispatcher, types, F, Router
 from aiogram.filters import CommandStart, Command
@@ -275,22 +276,32 @@ def _subjects_match(subj1, subj2):
 
     return clean1 == clean2
 
-def _time_to_minutes(t: str) -> int:
-    """'12:00:00' или '12:00' → минуты от начала дня"""
-    parts = t.strip().split(':')
-    return int(parts[0]) * 60 + int(parts[1])
+def _time_to_minutes(t) -> int:
+    """Любой формат времени → минуты от начала дня. Мусор → в конец списка."""
+    t = str(t or '')
+    m = re.search(r'(\d{1,2})[:.](\d{2})', t)   # "12:00", "12.00", "12:00:00"
+    if m:
+        return int(m.group(1)) * 60 + int(m.group(2))
+    m = re.search(r'(\d{1,2})', t)               # просто "12"
+    if m:
+        return int(m.group(1)) * 60
+    print(f"⚠️ Странное время в базе: {t!r}")
+    return 9999
 
 def _sort_lessons(lessons):
     """Сортирует пары по времени начала"""
-    return sorted(lessons, key=lambda lesson: _time_to_minutes(lesson[0].split(' - ')[0]))
+    return sorted(lessons, key=lambda lesson: _time_to_minutes(str(lesson[0]).split(' - ')[0]))
 
-def _format_time(time_str: str) -> str:
-    """'10:15:00 - 11:50:00' → '10:15 - 11:50'"""
+def _format_time(time_str) -> str:
+    """'10:15:00 - 11:50:00' → '10:15 - 11:50'; мусор оставляет как есть"""
     def cut(t):
-        p = t.strip().split(':')
-        return f"{int(p[0]):02d}:{int(p[1]):02d}"
-    a, b = time_str.split(' - ')
-    return f"{cut(a)} - {cut(b)}"
+        m = re.match(r'\s*(\d{1,2})[:.](\d{2})(?::\d{2})?', str(t or ''))
+        return f"{int(m.group(1)):02d}:{m.group(2)}" if m else str(t or '').strip()
+    s = str(time_str or '')
+    if ' - ' in s:
+        a, b = s.split(' - ', 1)
+        return f"{cut(a)} - {cut(b)}"
+    return s
 
 def _time_key(time_str: str):
     """Превращает время в минуты от начала дня для правильной сортировки"""
